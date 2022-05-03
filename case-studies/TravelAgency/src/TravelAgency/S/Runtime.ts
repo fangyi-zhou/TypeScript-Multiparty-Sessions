@@ -4,10 +4,10 @@ import { v1 as uuidv1 } from "uuid";
 import * as Cancellation from "./Cancellation";
 
 import * as opentelemetry from "@opentelemetry/sdk-node";
-import { ConsoleSpanExporter } from "@opentelemetry/sdk-trace-base";
+import * as api from "@opentelemetry/api";
+import { BasicTracerProvider, SimpleSpanProcessor, ConsoleSpanExporter } from "@opentelemetry/sdk-trace-base";
 import { Resource } from "@opentelemetry/resources";
 import { SemanticResourceAttributes } from "@opentelemetry/semantic-conventions";
-import { getNodeAutoInstrumentations } from "@opentelemetry/auto-instrumentations-node";
 
 import {
     Message,
@@ -155,13 +155,12 @@ class Session {
     private messageQueue: RoleToMessageQueue;
     private handlerQueue: RoleToHandlerQueue;
 
-    private traceExporter = new ConsoleSpanExporter();
-    private sdk = new opentelemetry.NodeSDK({
+    private provider = new BasicTracerProvider({
         resource: new Resource({
-            [SemanticResourceAttributes.SERVICE_NAME]: 'travel-agency',
-        }),
-        traceExporter: this.traceExporter,
+            [SemanticResourceAttributes.SERVICE_NAME]: 'travel-agency'
+        })
     })
+    private tracer = api.trace.getTracer('server-session');
 
 
     constructor(id: string,
@@ -207,6 +206,9 @@ class Session {
             socket.send(Message.serialise(Connect.Confirm));
         });
 
+        this.provider.addSpanProcessor(new SimpleSpanProcessor(new ConsoleSpanExporter()));
+        this.provider.register();
+
         this.next(initialise(this.id));
     }
 
@@ -230,6 +232,11 @@ class Session {
     // ===============
 
     send(to: Role.Peers, label: string, payload: any[], from: Role.All = Role.Self) {
+        const span = this.tracer.startSpan('Send');
+        span.setAttribute("mpst.action", "send");
+        span.setAttribute("mpst.msgLabel", label);
+        span.setAttribute("mpst.partner", to);
+        span.setAttribute("mpst.currentRole", from);
         const message = Message.serialise<Message.Channel>({ role: from, label, payload });
         const onError = (error?: Error) => {
             if (error !== undefined) {
@@ -243,6 +250,7 @@ class Session {
             }
         };
         this.roleToSocket[to].send(message, onError);
+        span.end()
     }
 
     receive(from: Role.Peers) {
@@ -252,12 +260,18 @@ class Session {
                 // Route message
                 this.send(role, label, payload, from);
             } else {
+                const span = this.tracer.startSpan('Receive');
+                span.setAttribute("mpst.action", "receive");
+                span.setAttribute("mpst.msgLabel", label);
+                span.setAttribute("mpst.partner", from);
+                span.setAttribute("mpst.currentRole", role);
                 const handler = this.handlerQueue[from].shift();
                 if (handler !== undefined) {
                     handler(data);
                 } else {
                     this.messageQueue[from].push(data);
                 }
+                span.end()
             }
         }
     }
