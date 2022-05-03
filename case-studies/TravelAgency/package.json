@@ -15,6 +15,9 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@opentelemetry/api": "^1.1.0",
+    "@opentelemetry/auto-instrumentations-node": "^0.28.0",
+    "@opentelemetry/sdk-node": "^0.28.0",
     "express": "^4.17.1",
     "uuid": "^8.3.0",
     "ws": "^7.5.7"

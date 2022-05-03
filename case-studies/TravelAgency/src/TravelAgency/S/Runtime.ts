@@ -3,6 +3,12 @@ import { v1 as uuidv1 } from "uuid";
 
 import * as Cancellation from "./Cancellation";
 
+import * as opentelemetry from "@opentelemetry/sdk-node";
+import { ConsoleSpanExporter } from "@opentelemetry/sdk-trace-base";
+import { Resource } from "@opentelemetry/resources";
+import { SemanticResourceAttributes } from "@opentelemetry/semantic-conventions";
+import { getNodeAutoInstrumentations } from "@opentelemetry/auto-instrumentations-node";
+
 import {
     Message,
     Role,
@@ -100,7 +106,7 @@ export class S {
 
                     if (waiting.size === 0) {
                         connectionContexts.shift();
-                        
+
                         // Execute protocol when all participants have joined.
                         new Session(
                             generateID(),
@@ -148,6 +154,15 @@ class Session {
     private activeRoles: Set<Role.Peers>;
     private messageQueue: RoleToMessageQueue;
     private handlerQueue: RoleToHandlerQueue;
+
+    private traceExporter = new ConsoleSpanExporter();
+    private sdk = new opentelemetry.NodeSDK({
+        resource: new Resource({
+            [SemanticResourceAttributes.SERVICE_NAME]: 'travel-agency',
+        }),
+        traceExporter: this.traceExporter,
+    })
+
 
     constructor(id: string,
         wss: WebSocket.Server,
