@@ -8,6 +8,7 @@ import * as api from "@opentelemetry/api";
 import { BasicTracerProvider, SimpleSpanProcessor, ConsoleSpanExporter } from "@opentelemetry/sdk-trace-base";
 import { Resource } from "@opentelemetry/resources";
 import { SemanticResourceAttributes } from "@opentelemetry/semantic-conventions";
+import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-grpc";
 
 import {
     Message,
@@ -206,7 +207,12 @@ class Session {
             socket.send(Message.serialise(Connect.Confirm));
         });
 
-        this.provider.addSpanProcessor(new SimpleSpanProcessor(new ConsoleSpanExporter()));
+        const collectorOptions = {
+            url: 'localhost:30080'
+        };
+
+        const exporter = new OTLPTraceExporter(collectorOptions);
+        this.provider.addSpanProcessor(new SimpleSpanProcessor(exporter));
         this.provider.register();
 
         this.next(initialise(this.id));
@@ -223,6 +229,7 @@ class Session {
             case 'Receive':
                 return state.prepareReceive(this.next, this.cancel, this.registerMessageHandler);
             case 'Terminal':
+                this.provider.forceFlush();
                 return;
         }
     }
