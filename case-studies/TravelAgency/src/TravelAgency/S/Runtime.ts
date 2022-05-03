@@ -240,7 +240,7 @@ class Session {
 
     send(to: Role.Peers, label: string, payload: any[], from: Role.All = Role.Self) {
         const span = this.tracer.startSpan('Send');
-        span.setAttribute("mpst.action", "send");
+        span.setAttribute("mpst.action", "Send");
         span.setAttribute("mpst.msgLabel", label);
         span.setAttribute("mpst.partner", to);
         span.setAttribute("mpst.currentRole", from);
@@ -268,7 +268,7 @@ class Session {
                 this.send(role, label, payload, from);
             } else {
                 const span = this.tracer.startSpan('Receive');
-                span.setAttribute("mpst.action", "receive");
+                span.setAttribute("mpst.action", "Recv");
                 span.setAttribute("mpst.msgLabel", label);
                 span.setAttribute("mpst.partner", from);
                 span.setAttribute("mpst.currentRole", role);
