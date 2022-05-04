@@ -1,6 +1,13 @@
 // Runtime.tsx
 import React from 'react';
 
+import * as api from "@opentelemetry/api";
+import { BasicTracerProvider, SimpleSpanProcessor } from "@opentelemetry/sdk-trace-base";
+import { Resource } from "@opentelemetry/resources";
+import { SemanticResourceAttributes } from "@opentelemetry/semantic-conventions";
+import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
+import { WebTracerProvider } from "@opentelemetry/sdk-trace-web"
+
 import * as Cancellation from './Cancellation';
 import * as Roles from './Roles';
 import * as Message from './Message';
@@ -98,6 +105,10 @@ class A extends React.Component<Props & Transport, ComponentState> {
     private messageQueue: RoleToMessageQueue
     private handlerQueue: RoleToHandlerQueue
 
+    private provider : WebTracerProvider; 
+    private tracer : api.Tracer;
+    private backgroundSpan : api.Span;
+
     constructor(props: Props & Transport) {
         super(props);
 
@@ -123,6 +134,20 @@ class A extends React.Component<Props & Transport, ComponentState> {
         this.advance = this.advance.bind(this);
         this.cancel = this.cancel.bind(this);
         this.terminate = this.terminate.bind(this);
+        this.provider = new WebTracerProvider({
+            resource: new Resource({
+                [SemanticResourceAttributes.SERVICE_NAME]: 'travel-agency'
+            })
+        })
+        const collectorOptions = {
+            url: 'http://localhost:4318/v1/traces'
+        };
+
+        const exporter = new OTLPTraceExporter(collectorOptions);
+        this.provider.addSpanProcessor(new SimpleSpanProcessor(exporter));
+        this.provider.register();
+        this.tracer = api.trace.getTracer('A-session');
+        this.backgroundSpan = this.tracer.startSpan(Roles.Self);
     }
 
     componentDidMount() {
@@ -200,6 +225,8 @@ class A extends React.Component<Props & Transport, ComponentState> {
 
         if (isTerminalState(state)) {
             const View = this.props.states[state];
+            this.backgroundSpan.end();
+            this.provider.forceFlush();
             this.setState({
                 elem: <View terminate={this.terminate} />
             });
@@ -274,8 +301,15 @@ class A extends React.Component<Props & Transport, ComponentState> {
     // ===============
 
     private sendMessage(role: Roles.Peers, label: string, payload: any, successor: State) {
+        const ctx = api.trace.setSpan(api.context.active(), this.backgroundSpan);
+        const span = this.tracer.startSpan('Send', undefined, ctx);
+        span.setAttribute("mpst.action", "Send");
+        span.setAttribute("mpst.msgLabel", label);
+        span.setAttribute("mpst.partner", role);
+        span.setAttribute("mpst.currentRole", Roles.Self);
         this.props.ws.send(JSON.stringify(Message.toChannel(role, label, payload)));
         this.advance(successor);
+        span.end()
     }
 
     private onReceiveMessage({ data }: MessageEvent) {
@@ -284,12 +318,19 @@ class A extends React.Component<Props & Transport, ComponentState> {
         if (handler !== undefined) {
             // Handler registered -- process.
             try {
+                const ctx = api.trace.setSpan(api.context.active(), this.backgroundSpan);
+                const span = this.tracer.startSpan('Receive', undefined, ctx);
+                span.setAttribute("mpst.action", "Recv");
+                span.setAttribute("mpst.msgLabel", message.label);
+                span.setAttribute("mpst.partner", message.role);
+                span.setAttribute("mpst.currentRole", Roles.Self);
                 const continuation = handler(data);
                 if (continuation instanceof Promise) {
                     continuation.then(this.advance).catch(this.cancel);
                 } else {
                     this.advance(continuation);
                 }
+                span.end()
             } catch (error) {
                 this.cancel(error);
             }
