@@ -239,11 +239,14 @@ class Session {
     // ===============
 
     send(to: Role.Peers, label: string, payload: any[], from: Role.All = Role.Self) {
-        const span = this.tracer.startSpan('Send');
-        span.setAttribute("mpst.action", "Send");
-        span.setAttribute("mpst.msgLabel", label);
-        span.setAttribute("mpst.partner", to);
-        span.setAttribute("mpst.currentRole", from);
+        let span;
+        if (from === Role.Self) {
+            span = this.tracer.startSpan('Send');
+            span.setAttribute("mpst.action", "Send");
+            span.setAttribute("mpst.msgLabel", label);
+            span.setAttribute("mpst.partner", to);
+            span.setAttribute("mpst.currentRole", from);
+        }
         const message = Message.serialise<Message.Channel>({ role: from, label, payload });
         const onError = (error?: Error) => {
             if (error !== undefined) {
@@ -257,7 +260,9 @@ class Session {
             }
         };
         this.roleToSocket[to].send(message, onError);
-        span.end()
+        if (span !== undefined) {
+            span.end()
+        }
     }
 
     receive(from: Role.Peers) {
