@@ -162,6 +162,7 @@ class Session {
         })
     })
     private tracer = api.trace.getTracer('server-session');
+    private backgroundSpan : opentelemetry.api.Span;
 
 
     constructor(id: string,
@@ -214,6 +215,7 @@ class Session {
         const exporter = new OTLPTraceExporter(collectorOptions);
         this.provider.addSpanProcessor(new SimpleSpanProcessor(exporter));
         this.provider.register();
+        this.backgroundSpan = this.tracer.startSpan(Role.Self);
 
         this.next(initialise(this.id));
     }
@@ -229,6 +231,7 @@ class Session {
             case 'Receive':
                 return state.prepareReceive(this.next, this.cancel, this.registerMessageHandler);
             case 'Terminal':
+                this.backgroundSpan.end();
                 this.provider.forceFlush();
                 return;
         }
@@ -241,7 +244,8 @@ class Session {
     send(to: Role.Peers, label: string, payload: any[], from: Role.All = Role.Self) {
         let span;
         if (from === Role.Self) {
-            span = this.tracer.startSpan('Send');
+            const ctx = opentelemetry.api.trace.setSpan(opentelemetry.api.context.active(), this.backgroundSpan);
+            span = this.tracer.startSpan('Send', undefined, ctx);
             span.setAttribute("mpst.action", "Send");
             span.setAttribute("mpst.msgLabel", label);
             span.setAttribute("mpst.partner", to);
@@ -272,7 +276,8 @@ class Session {
                 // Route message
                 this.send(role, label, payload, from);
             } else {
-                const span = this.tracer.startSpan('Receive');
+                const ctx = opentelemetry.api.trace.setSpan(opentelemetry.api.context.active(), this.backgroundSpan);
+                const span = this.tracer.startSpan('Receive', undefined, ctx);
                 span.setAttribute("mpst.action", "Recv");
                 span.setAttribute("mpst.msgLabel", label);
                 span.setAttribute("mpst.partner", from);
