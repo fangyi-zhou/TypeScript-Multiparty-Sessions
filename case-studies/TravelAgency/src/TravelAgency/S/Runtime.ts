@@ -5,7 +5,7 @@ import * as Cancellation from "./Cancellation";
 
 import * as opentelemetry from "@opentelemetry/sdk-node";
 import * as api from "@opentelemetry/api";
-import { BasicTracerProvider, SimpleSpanProcessor, ConsoleSpanExporter } from "@opentelemetry/sdk-trace-base";
+import { BasicTracerProvider, SimpleSpanProcessor } from "@opentelemetry/sdk-trace-base";
 import { Resource } from "@opentelemetry/resources";
 import { SemanticResourceAttributes } from "@opentelemetry/semantic-conventions";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-grpc";

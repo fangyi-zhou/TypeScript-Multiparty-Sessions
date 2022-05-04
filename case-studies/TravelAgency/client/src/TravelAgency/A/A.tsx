@@ -2,7 +2,7 @@
 import React from 'react';
 
 import * as api from "@opentelemetry/api";
-import { BasicTracerProvider, SimpleSpanProcessor } from "@opentelemetry/sdk-trace-base";
+import { SimpleSpanProcessor } from "@opentelemetry/sdk-trace-base";
 import { Resource } from "@opentelemetry/resources";
 import { SemanticResourceAttributes } from "@opentelemetry/semantic-conventions";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
@@ -134,6 +134,7 @@ class A extends React.Component<Props & Transport, ComponentState> {
         this.advance = this.advance.bind(this);
         this.cancel = this.cancel.bind(this);
         this.terminate = this.terminate.bind(this);
+
         this.provider = new WebTracerProvider({
             resource: new Resource({
                 [SemanticResourceAttributes.SERVICE_NAME]: 'travel-agency'
